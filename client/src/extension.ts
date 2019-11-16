@@ -1,7 +1,3 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
 
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -10,8 +6,7 @@ import {
 	LanguageClient,
 	LanguageClientOptions,
 	ServerOptions,
-	TransportKind,
-	CompletionTriggerKind
+	TransportKind
 } from 'vscode-languageclient';
 
 let client: LanguageClient;
@@ -48,8 +43,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create the language client and start the client.
 	client = new LanguageClient(
-		'languageServerExample',
-		'Language Server Example',
+		'dpscriptLanguageServer',
+		'DPScript Language Server',
 		serverOptions,
 		clientOptions
 	);
@@ -59,6 +54,8 @@ export function activate(context: vscode.ExtensionContext) {
 	
 	let defaultCompletion = vscode.languages.registerCompletionItemProvider('dpscript',{
 		provideCompletionItems(doc,pos,token,ctx) {
+			console.log("completing default");
+			
 			let objective = new vscode.CompletionItem("objective");
 			objective.insertText = new vscode.SnippetString('objective ${1:name}');
 			objective.documentation = "Creates a new objective to use on entities.";
@@ -81,6 +78,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	let selector = vscode.languages.registerCompletionItemProvider('dpscript', {
 		provideCompletionItems(doc,pos,token,ctx) {
+			console.log("completing selector");
+			
 			let word = doc.getWordRangeAtPosition(pos);
 			let line = doc.lineAt(pos.line).text;
 			if (line.charAt(word.start.character-1) !== '@' && !ctx.triggerCharacter) {
@@ -112,6 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
 	},'@');
 	let selectorParams = vscode.languages.registerCompletionItemProvider('dpscript', {
 		provideCompletionItems(doc,pos,token,ctx) {
+			console.log("completing selector params");
 			let line = doc.lineAt(pos.line).text.substring(0,pos.character);
 			if (line.lastIndexOf('[') > line.lastIndexOf(']')) {
 				let targetRange = doc.getWordRangeAtPosition(new vscode.Position(pos.line,line.lastIndexOf('[')-1));
