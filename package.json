@@ -8,10 +8,13 @@
 		"type": "git",
 		"url": "https://github.com/shinyb123/DPScriptVSC"
 	},
-	"publisher": "vscode-samples",
-	"categories": [],
+	"publisher": "TheShinyBunny",
+	"categories": ["Programming Languages"],
 	"keywords": [
-		"multi-root ready"
+		"minecraft",
+		"dpscript",
+		"datapack",
+		"mcfunction"
 	],
 	"engines": {
 		"vscode": "^1.33.0"
@@ -38,27 +41,7 @@
 			}
 		],
 		"configuration": {
-			"type": "object",
-			"title": "Example configuration",
-			"properties": {
-				"languageServerExample.maxNumberOfProblems": {
-					"scope": "resource",
-					"type": "number",
-					"default": 100,
-					"description": "Controls the maximum number of problems produced by the server."
-				},
-				"languageServerExample.trace.server": {
-					"scope": "window",
-					"type": "string",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"default": "off",
-					"description": "Traces the communication between VS Code and the language server."
-				}
-			}
+			
 		}
 	},
 	"scripts": {

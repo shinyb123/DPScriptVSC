@@ -1,13 +1,13 @@
 {
-	"name": "lsp-sample-client",
-	"description": "VSCode part of a language server",
+	"name": "dpscript-vsc-client",
+	"description": "DPScript extension",
 	"author": "Microsoft Corporation",
 	"license": "MIT",
 	"version": "0.0.1",
 	"publisher": "vscode",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Microsoft/vscode-extension-samples"
+		"url": "https://github.com/shinyb123/DPScriptVSC"
 	},
 	"engines": {
 		"vscode": "^1.33.0"

@@ -1,15 +1,15 @@
 {
-	"name": "lsp-sample-server",
-	"description": "Example implementation of a language server in node.",
+	"name": "dpscript-vsc-server",
+	"description": "DPScript Language Server",
 	"version": "1.0.0",
-	"author": "Microsoft Corporation",
+	"author": "TheShinyBunny",
 	"license": "MIT",
 	"engines": {
 		"node": "*"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Microsoft/vscode-extension-samples"
+		"url": "https://github.com/shinyb123/DPScriptVSC"
 	},
 	"dependencies": {
 		"vscode-languageserver": "^5.2.1",
