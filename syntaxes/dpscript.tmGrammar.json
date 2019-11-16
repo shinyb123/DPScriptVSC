@@ -1,0 +1,80 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"scopeName": "source.dpscript",
+	"patterns": [{"include": "#expression"}],
+	"repository": {
+		"expression": {
+			"patterns": [{"include": "#keyword"},{"include": "#selector"},{"include": "#square_params"},{"include": "#nbt"},{"include": "#relative_pos"},{"include": "#string"},{"include": "#selector_member"}]
+		},
+		"keyword": {
+			"match": "(^|\\W)(const|class|extends|tick|function|global|objective|if|as|at|for|positioned|offset|summon|new|switch|case|default|break|print)\\W?",
+			"name":"keyword"
+		},
+		"selector":{
+			"begin": "@",
+			"end": "[\\[\\s\\.]",
+			"beginCaptures": {"0":{"name":"constant.regexp"}},
+			"contentName":"constant.regexp"
+		},
+		"square_params":{
+			"begin": "\\[",
+			"end": "\\]",
+			"name":"variable.parameter",
+			"patterns": [
+				{
+					"include": "#nbt_values"
+				}
+			]
+		},
+		"nbt":{
+			"begin": "(\\{)\\w",
+			"end": "\\}",
+			"name":"comment",
+			"patterns": [
+				{
+					"include": "#nbt_values"
+				}
+			]
+		},
+		"nbt_values":{
+			"patterns": [
+				{
+					"include": "#square_params"
+				},
+				{
+					"match": "-?\\d{1,3}b",
+					"name":"constant.character"
+				},
+				{
+					"match": "-?\\d{1,5}s",
+					"name":"entity.name"
+				},
+				{
+					"match": "-?\\d+(\\.\\d+)?d",
+					"name":"keyword.control.less"
+				},
+				{
+					"match": "-?\\d{1,10}",
+					"name":"constant.numeric"
+				},
+				{
+					"include": "#string"
+				}
+			]
+		},
+		"relative_pos":{
+			"begin": "\\~",
+			"end": "\\s",
+			"name":"entity.name.selector"
+		},
+		"string": {
+			"begin": "\"",
+			"end": "\"",
+			"name":"string"
+		},
+		"selector_member": {
+			"match": "\\.(kill|give|effect|enchant|nbt|clear|title|subtitle|titleTimes|action)",
+			"name": "entity.name.function"
+		}
+	}
+}
