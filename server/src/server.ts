@@ -20,7 +20,7 @@ import {
 
 import URI from "vscode-uri";
 
-import {exec} from 'child_process';
+import {exec, ChildProcess, spawn} from 'child_process';
 import * as fs from 'fs';
 import { uriToFilePath } from 'vscode-languageserver/lib/files';
 
@@ -37,6 +37,8 @@ let hasWorkspaceFolderCapability: boolean = false;
 let hasDiagnosticRelatedInformationCapability: boolean = false;
 
 let extensionDir: string;
+let serverJar: ChildProcess;
+let errors: any = {};
 
 connection.onInitialize((params: InitializeParams) => {
 	console.log("init server");
@@ -57,7 +59,6 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics &&
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
-
 	return {
 		capabilities: {
 			textDocumentSync: documents.syncKind
@@ -65,7 +66,9 @@ connection.onInitialize((params: InitializeParams) => {
 	};
 });
 
-connection.onInitialized(() => {
+let serverDatapacksPath: string | undefined;
+
+connection.onInitialized(async () => {
 	if (hasConfigurationCapability) {
 		// Register for all configuration changes.
 		connection.client.register(DidChangeConfigurationNotification.type, undefined);
@@ -75,10 +78,85 @@ connection.onInitialized(() => {
 			connection.console.log('Workspace folder change event received.');
 		});
 	}
+	connection.onNotification("server_start",(path)=>{
+		serverDatapacksPath = path;
+	});
+	connection.onNotification("server_stop",()=>{
+		serverDatapacksPath = undefined;
+	});
+	console.log("launching DPScript server");
+	let folders = await connection.workspace.getWorkspaceFolders() || [];
+	if (folders.length != 0) {
+		let f = folders[0];
+		console.log("uri " + f.uri);
+		let path = uriToFilePath(f.uri) || "";
+		console.log("path " + path);
+		try {
+			let cmd = "java -jar \"" + extensionDir + "\\DPScriptServer.jar\" " + path;
+			console.log(cmd);
+			serverJar = spawn('java',['-jar',extensionDir + "\\DPScriptServer.jar",path]);
+			serverJar.stdout.on('data',(msg)=>{
+				let str = msg.toString('utf8');
+				if (str.length > 0 && str != '\n') {
+					console.log(str.trim());
+				}
+			});
+			serverJar.stderr.on('data',(stderr)=>{
+				if (typeof stderr != 'string') {
+					stderr = stderr.toString('utf8');
+				}
+				if (stderr.startsWith("error:")) {
+					let sep1 = stderr.indexOf('|');
+					let file = stderr.substring("error:".length,sep1);
+					let doc = documents.get(URI.file(file).toString());
+					if (doc) {
+						let dash = stderr.indexOf('-',sep1+1);
+						let sep2 = stderr.indexOf('|',dash);
+						let errLine = Number(stderr.substring(sep1+1,dash));
+						let errCol = Number(stderr.substring(dash+1,sep2));
+						let line = errLine == -1 ? doc ? doc.lineCount - 1 : -1 : errLine;
+						let column = errCol;
+						let pos = line == -1 ? doc.positionAt(doc.getText().length-1) : Position.create(line-1,column);
+						if (!errors[doc.uri]) {
+							errors[doc.uri] = [];
+						}
+						errors[doc.uri].push({
+							range: {
+								start: pos,
+								end: pos
+							},
+							severity: DiagnosticSeverity.Error,
+							message: stderr.substring(sep2+1),
+							source: "dpscript"
+						});
+						connection.sendDiagnostics({uri: URI.file(file).toString(),diagnostics: errors[doc.uri]});
+					}
+				} else {
+					console.log(stderr);
+				}
+			});
+		} catch (err) {
+			console.log(err);
+		}
+	}
 });
 
-documents.onDidSave((change)=>{
-	compileDPScript();
+
+documents.onDidSave((event)=>{
+	if (serverJar) {
+		errors[event.document.uri] = [];
+		connection.sendDiagnostics({uri: event.document.uri, diagnostics: []});
+		console.log("recompiling");
+		serverJar.stdin.write("/logerrors\r\n",()=>{
+			if (serverDatapacksPath) {
+				serverJar.stdin.write("/compile " + serverDatapacksPath + "\r\n",()=>{
+					connection.sendNotification("reload_server");
+				});
+			}
+		});
+		
+	}
+	//compileDPScript();
 });
 
 async function compileDPScript() {

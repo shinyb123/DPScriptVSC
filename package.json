@@ -20,7 +20,8 @@
 		"vscode": "^1.33.0"
 	},
 	"activationEvents": [
-		"onLanguage:dpscript"
+		"onLanguage:dpscript",
+		"onCommand:startTestServer"
 	],
 	"main": "./client/out/extension",
 	"contributes": {
@@ -30,7 +31,8 @@
 				"extensions": [
 					".dps"
 				],
-				"id": "dpscript"
+				"id": "dpscript",
+				"configuration": "./language-configurations/dpscript.json"
 			}
 		],
 		"grammars": [
@@ -42,7 +44,13 @@
 		],
 		"configuration": {
 			
-		}
+		},
+		"commands": [
+			{
+				"command": "startTestServer",
+				"title": "Start Test Server"
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "cd client && npm run update-vscode && cd .. && npm run compile",

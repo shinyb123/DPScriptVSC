@@ -1,18 +1,28 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { launchClient, launchServer, MinecraftServer } from 'minecraft_utils';
 
 import {
 	LanguageClient,
 	LanguageClientOptions,
 	ServerOptions,
-	TransportKind
+	TransportKind,
+	CompletionItemKind
 } from 'vscode-languageclient';
+import { copyFileSync, existsSync } from 'fs';
+
+let extensionPath;
 
 let client: LanguageClient;
+let server: MinecraftServer;
+
+let minecraftTestPath = vscode.workspace.workspaceFolders[0].uri.fsPath + '/ignore/minecraft/';
 
 export function activate(context: vscode.ExtensionContext) {
+	extensionPath = context.extensionPath;
 	// The server is implemented in node
+
 	let serverModule = context.asAbsolutePath(
 		path.join('server', 'out', 'server.js')
 	);
@@ -51,11 +61,21 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Start the client. This will also launch the server
 	client.start();
+
+	vscode.commands.registerCommand("startTestServer",(args)=>{
+		startTestServer();
+	});
+
+	vscode.workspace.onDidSaveTextDocument((doc)=>{
+		if (server && !server.process.killed) {
+			console.log("reloading server!");
+			
+		}
+	});
 	
 	let defaultCompletion = vscode.languages.registerCompletionItemProvider('dpscript',{
 		provideCompletionItems(doc,pos,token,ctx) {
 			console.log("completing default");
-			
 			let objective = new vscode.CompletionItem("objective");
 			objective.insertText = new vscode.SnippetString('objective ${1:name}');
 			objective.documentation = "Creates a new objective to use on entities.";
@@ -82,7 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
 			
 			let word = doc.getWordRangeAtPosition(pos);
 			let line = doc.lineAt(pos.line).text;
-			if (line.charAt(word.start.character-1) !== '@' && !ctx.triggerCharacter) {
+			if (word && line.charAt(word.start.character-1) !== '@' && !ctx.triggerCharacter) {
 				console.log("not completing selector");
 				return;
 			}
@@ -95,13 +115,13 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 			let items = [];
 			for (let e of entities) {
-				let i = new vscode.CompletionItem(e);
+				let i = new vscode.CompletionItem(e,CompletionItemKind.Class);
 				i.documentation = "Targets all " + pluralizeEntity(e) + ". (Translates to @e[type=" + e + "])";
 				items.push(i);
 			}
 			for (let t in targets) {
 				let doc = targets[t][0];
-				let i = new vscode.CompletionItem(t);
+				let i = new vscode.CompletionItem(t,CompletionItemKind.Field);
 				i.documentation = doc;
 				i.detail = "Aliases: " + targets[t].slice(1).join(', ');
 				items.push(i);
@@ -117,37 +137,69 @@ export function activate(context: vscode.ExtensionContext) {
 				let targetRange = doc.getWordRangeAtPosition(new vscode.Position(pos.line,line.lastIndexOf('[')-1));
 				let lineUntilSelector = line.substring(0,targetRange.start.character);
 				if (lineUntilSelector.charAt(lineUntilSelector.trimRight().length-1) == '@') {
-					let gamemode = new vscode.CompletionItem('gamemode');
+					let gamemode = new vscode.CompletionItem('gamemode',CompletionItemKind.Property);
 					gamemode.documentation = "Selects players set to the specified gamemode. Can be an index (like until 1.12) or gamemode name";
-					let tag = new vscode.CompletionItem('tag');
+					let tag = new vscode.CompletionItem('tag',CompletionItemKind.Property);
 					tag.documentation = "Selects entities with the specified tag";
-					let tags = new vscode.CompletionItem('tags');
+					let tags = new vscode.CompletionItem('tags',CompletionItemKind.Property);
 					tags.documentation = "Selects entities with the specified tag list inside [ ]";
 					return [gamemode,tag,tags];
 				}
 			}
 		}
 	},'[',',');
+
+
+	let signatureHelpers = vscode.languages.registerSignatureHelpProvider('dpscript',{
+		provideSignatureHelp(doc, pos, t, ctx) {
+			console.log("activated signature help");
+			let line = doc.lineAt(pos.line);
+			let parenIndex = line.text.substring(0,pos.character+1).lastIndexOf('(');
+			if (parenIndex === -1) return;
+			let method = doc.getWordRangeAtPosition(pos.translate(0,parenIndex - pos.character));
+			let token = doc.getText(method);
+			for (let m in selectorMembers) {
+				if (token == m) {
+					let value = selectorMembers[m];
+					let paramsString = "";
+					if (value.params) {
+						for (let p in value.params) {
+							paramsString += "- *" + p + "*: " + value.params[p] + "\n";
+						}
+					}
+					return {
+						signatures: [{
+							label: value.usage,
+							documentation: new vscode.MarkdownString(`${value.doc}${paramsString == "" ? "" : `\n\n#### Parameters:\n${paramsString}`}`),
+							parameters: []
+						}],
+						activeParameter: -1,
+						activeSignature: 0
+					};
+				}
+			}
+			return new vscode.SignatureHelp();
+		}
+	},'(',',');
+
 	let selectorMember = vscode.languages.registerCompletionItemProvider('dpscript',{
 		provideCompletionItems(doc,pos,token,ctx) {
 			console.log("Completing entity selector member");
 			let line = doc.lineAt(pos.line).text.substring(0,ctx.triggerCharacter ? pos.character-1 : doc.getWordRangeAtPosition(pos.translate(0,-1)).start.character-1);
-			console.log("line: '" + line + "'");
-			console.log("trimmed line: '" + line.trimLeft() + "'");
 			let line2 = "";
 			try {
 				line2 = line.substring(0,doc.getWordRangeAtPosition(pos.translate(0,-1)).start.character);
-				console.log("line 2: '" + line2 + "'");
+				// console.log("line 2: '" + line2 + "'");
 			} catch (e) {}
 			if (line.charAt(line.trimRight().length - 1) === ']' || line2.charAt(line2.trimRight().length-1) === '@') {
-				console.log("last @: " + line.lastIndexOf('@'));
-				console.log("last [: " + line.lastIndexOf('['));
-				console.log("second to last ]: " + line.substring(0,line.lastIndexOf(']')).lastIndexOf(']'));
+				// console.log("last @: " + line.lastIndexOf('@'));
+				// console.log("last [: " + line.lastIndexOf('['));
+				// console.log("second to last ]: " + line.substring(0,line.lastIndexOf(']')).lastIndexOf(']'));
 				if ((line.lastIndexOf('@') < line.lastIndexOf('[') || line.lastIndexOf('[') == -1) && line.lastIndexOf('@') > line.substring(0,line.lastIndexOf(']')).lastIndexOf(']')) {
 					let items = [];
 					for (let k in selectorMembers) {
 						let member = selectorMembers[k];
-						let i = new vscode.CompletionItem(k);
+						let i = new vscode.CompletionItem(k,CompletionItemKind.Method);
 						if (member.snippet) {
 							i.insertText = new vscode.SnippetString(member.snippet);
 						} else if (member.insert) {
@@ -167,11 +219,25 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	},'.');
 
-	context.subscriptions.push(defaultCompletion, selector, selectorParams, selectorMember);
+	
+
+	let hover = vscode.languages.registerHoverProvider('dpscript',{
+		provideHover(doc,pos,t) {
+			let range = doc.getWordRangeAtPosition(pos);
+			let token = doc.getText(range);
+			for (let sm in selectorMembers) {
+				if (token == sm) {
+					return new vscode.Hover(selectorMembers[sm].doc);
+				}
+			}
+		}
+	});
+
+	context.subscriptions.push(defaultCompletion , selector, selectorParams, selectorMember, signatureHelpers, hover);
 	
 }
 
-let entities = ["item","xp_orb","area_effect_cloud","elder_guardian","wither_skeleton","stray","egg","leash_knot","painting","arrow","snowball","fireball","small_fireball","ender_pearl","eye_of_ender_signal","potion","xp_bottle","item_frame","wither_skull","tnt","falling_block","fireworks_rocket","husk","spectral_arrow","shulker_bullet","dragon_fireball","zombie_villager","skeleton_horse","zombie_horse","armor_stand","donkey","mule","evocation_fangs","evocation_illager","vex","vindication_illager","illusion_illager","commandblock_minecart","boat","minecart","chest_minecart","furnace_minecart","tnt_minecart","hopper_minecart","spawner_minecart","creeper","skeleton","spider","giant","zombie","slime","ghast","zombie_pigman","enderman","cave_spider","silverfish","blaze","magma_cube","ender_dragon","wither","bat","witch","endermite","guardian","shulker","pig","sheep","cow","chicken","squid","wolf","mooshroom","snowman","ocelot","villager_golem","horse","rabbit","polar_bear","llama","llama_spit","parrot","villager","ender_crystal"];
+let entities = ["item","xp_orb","area_effect_cloud","elder_guardian","wither_skeleton","stray","egg","leash_knot","painting","arrow","snowball","fireball","small_fireball","ender_pearl","eye_of_ender_signal","potion","xp_bottle","item_frame","wither_skull","tnt","falling_block","fireworks_rocket","husk","spectral_arrow","shulker_bullet","dragon_fireball","zombie_villager","skeleton_horse","zombie_horse","armor_stand","donkey","mule","evocation_fangs","evocation_illager","vex","vindication_illager","illusion_illager","commandblock_minecart","boat","minecart","chest_minecart","furnace_minecart","tnt_minecart","hopper_minecart","spawner_minecart","creeper","skeleton","spider","giant","zombie","slime","ghast","zombie_pigman","enderman","cave_spider","silverfish","blaze","magma_cube","ender_dragon","wither","bat","witch","endermite","guardian","shulker","pig","sheep","cow","chicken","squid","wolf","mooshroom","snowman","ocelot","iron_golem","horse","rabbit","polar_bear","llama","llama_spit","parrot","villager","ender_crystal"];
 
 let plurals = {
 	"endermans": "endermen",
@@ -194,20 +260,33 @@ function pluralizeEntity(e) {
 
 let selectorMembers = {
 	"effect": {
-		"snippet": "effect($1) $0",
-		"doc": "Adds / removes an effect from the entity"
+		"snippet": "effect($1)",
+		"doc": "Adds a potion effect to the entity",
+		"usage": "effect(<effectId> [tier] for [duration] [hide])",
+		"params": {
+			"effectId": "ID of the effect to give. \nFor example: swiftness, blindness, haste... \nAliases like 'regen' or 'speed' are also allowed.",
+			"tier":"The level of the effect. Could be a number (0 means level 1) or a roman number, for example II for tier 2",
+			"duration": "The duration of the effect. Defaults to 30 seconds. \n\nExample valid values: 5s, 100ms, 65ticks, 20mins",
+			"hide": "Add the 'hide' keyword to disable the effect's particles."
+		}
 	},
 	"grant": {
-		"snippet": "grant(${1|only,from,until,all| $0})",
+		"snippet": "grant(${1|only,from,until,all|} $0)",
 		"doc": "Grants a player a specified advancement, a range of advancements or all."
 	},
 	"revoke": {
-		"snippet": "revoke(${1|only,from,until,all| $0})",
+		"snippet": "revoke(${1|only,from,until,all|} $0)",
 		"doc": "Removes from a player a specified advancement, a range of advancements or all."
 	},
 	"clear": {
 		"snippet": "clear($0)",
-		"doc": "Clears from the player inventory the spcified item"
+		"doc": "Clears items from the player inventory",
+		"usage":"clear([item] [nbt] * [amount])",
+		"params": {
+			"item": "The item ID to clear",
+			"nbt": "Optional NBT predicate for the item",
+			"amount": "A specific amount to clear. 0 will just simulate and return the number of items matched, and if omitted will clear every item"
+		}
 	},
 	"title": {
 		"snippet": "title($0)",
@@ -268,6 +347,26 @@ let selectorMembers = {
 	}
 };
 
+
+async function startTestServer() {
+	console.log("STARTING TEST SERVER");
+	server = await launchServer({dir: minecraftTestPath + 'server/',properties: {"online-mode": "false"}});
+	server.on("ready",async (s)=>{
+		let mcclient = await launchClient({dir: minecraftTestPath + 'client/', jvmArgs: "--username DPScriptDev"});
+		server.sendCommand("op DPScriptDev");
+		copyFileSync(extensionPath + "/servers.dat",minecraftTestPath + "client/servers.dat");
+		mcclient.on("close",()=>{
+			server.process.kill();
+		});
+		client.sendNotification("server_start",minecraftTestPath + 'server/world/datapacks/');
+	});
+	server.on("stop",()=>{
+		client.sendNotification("server_stop");
+	});
+	client.onNotification("reload_server",()=>{
+		server.sendCommand("reload");
+	});
+}
 
 
 export function deactivate(): Thenable<void> | undefined {
