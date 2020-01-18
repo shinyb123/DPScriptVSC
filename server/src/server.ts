@@ -84,6 +84,9 @@ connection.onInitialized(async () => {
 	connection.onNotification("server_stop",()=>{
 		serverDatapacksPath = undefined;
 	});
+	connection.onNotification("compile",async()=>{
+		serverJar.stdin.write("/compile " + uriToFilePath((await connection.workspace.getWorkspaceFolders() || [])[0].uri) + "/ignore/out\r\n");
+	});
 	console.log("launching DPScript server");
 	let folders = await connection.workspace.getWorkspaceFolders() || [];
 	if (folders.length != 0) {
@@ -233,7 +236,7 @@ connection.onDidOpenTextDocument((params) => {
 	// A text document got opened in VSCode.
 	// params.textDocument.uri uniquely identifies the document. For documents store on disk this is a file URI.
 	// params.textDocument.text the initial full content of the document.
-	compileDPScript();
+	//compileDPScript();
 });
 
 

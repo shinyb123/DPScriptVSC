@@ -1,7 +1,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { launchClient, launchServer, MinecraftServer } from 'minecraft_utils';
+import { launchClient, launchServer, MinecraftServer, MinecraftClient } from 'minecraft_utils';
 
 import {
 	LanguageClient,
@@ -15,7 +15,8 @@ import { copyFileSync, existsSync } from 'fs';
 let extensionPath;
 
 let client: LanguageClient;
-let server: MinecraftServer;
+let mcserver: MinecraftServer;
+let mcclient: MinecraftClient;
 
 let minecraftTestPath = vscode.workspace.workspaceFolders[0].uri.fsPath + '/ignore/minecraft/';
 
@@ -62,17 +63,13 @@ export function activate(context: vscode.ExtensionContext) {
 	// Start the client. This will also launch the server
 	client.start();
 
-	vscode.commands.registerCommand("startTestServer",(args)=>{
+	let startTest = vscode.commands.registerCommand("dpscript.startTestServer",(args)=>{
 		startTestServer();
 	});
-
-	vscode.workspace.onDidSaveTextDocument((doc)=>{
-		if (server && !server.process.killed) {
-			console.log("reloading server!");
-			
-		}
+	let compile = vscode.commands.registerCommand("dpscript.compileDPScript",(args)=>{
+		client.sendNotification("compile");
 	});
-	
+
 	let defaultCompletion = vscode.languages.registerCompletionItemProvider('dpscript',{
 		provideCompletionItems(doc,pos,token,ctx) {
 			console.log("completing default");
@@ -233,7 +230,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(defaultCompletion , selector, selectorParams, selectorMember, signatureHelpers, hover);
+	context.subscriptions.push(defaultCompletion , selector, selectorParams, selectorMember, signatureHelpers, hover, startTest, compile);
 	
 }
 
@@ -350,21 +347,21 @@ let selectorMembers = {
 
 async function startTestServer() {
 	console.log("STARTING TEST SERVER");
-	server = await launchServer({dir: minecraftTestPath + 'server/',properties: {"online-mode": "false"}});
-	server.on("ready",async (s)=>{
-		let mcclient = await launchClient({dir: minecraftTestPath + 'client/', jvmArgs: "--username DPScriptDev"});
-		server.sendCommand("op DPScriptDev");
+	mcserver = await launchServer({dir: minecraftTestPath + 'server/',properties: {"online-mode": "false"}});
+	mcserver.on("ready",async (s)=>{
+		mcclient = await launchClient({dir: minecraftTestPath + 'client/', jvmArgs: "--username DPScriptDev"});
+		mcserver.sendCommand("op DPScriptDev");
 		copyFileSync(extensionPath + "/servers.dat",minecraftTestPath + "client/servers.dat");
 		mcclient.on("close",()=>{
-			server.process.kill();
+			mcserver.process.kill();
 		});
 		client.sendNotification("server_start",minecraftTestPath + 'server/world/datapacks/');
 	});
-	server.on("stop",()=>{
+	mcserver.on("stop",()=>{
 		client.sendNotification("server_stop");
 	});
 	client.onNotification("reload_server",()=>{
-		server.sendCommand("reload");
+		mcserver.sendCommand("reload");
 	});
 }
 
@@ -372,6 +369,12 @@ async function startTestServer() {
 export function deactivate(): Thenable<void> | undefined {
 	if (!client) {
 		return undefined;
+	}
+	if (mcserver) {
+		mcserver.process.kill();
+	}
+	if (mcclient) {
+		mcclient.process.kill();
 	}
 	return client.stop();
 }

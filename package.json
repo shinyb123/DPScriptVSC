@@ -1,9 +1,10 @@
 {
-	"name": "dpscript-vsc",
-	"description": "An extension for DPScript development",
+	"name": "dpscript",
+	"description": "A VScode extension for DPScript development, a custom Minecraft Datapack language",
 	"author": "TheShinyBunny",
 	"license": "MIT",
 	"version": "1.0.0",
+	"displayName": "DPScript for VSC",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/shinyb123/DPScriptVSC"
@@ -14,14 +15,17 @@
 		"minecraft",
 		"dpscript",
 		"datapack",
-		"mcfunction"
+		"mcfunction",
+		"function",
+		"commands"
 	],
 	"engines": {
 		"vscode": "^1.33.0"
 	},
 	"activationEvents": [
 		"onLanguage:dpscript",
-		"onCommand:startTestServer"
+		"onCommand:dpscript.startTestServer",
+		"onCommand:dpscript.compileDPScript"
 	],
 	"main": "./client/out/extension",
 	"contributes": {
@@ -47,10 +51,22 @@
 		},
 		"commands": [
 			{
-				"command": "startTestServer",
-				"title": "Start Test Server"
+				"command": "dpscript.startTestServer",
+				"title": "DPScript: Start Test Server"
+			},
+			{
+				"command": "dpscript.compileDPScript",
+				"title": "Compile DPScript Project"
 			}
-		]
+		],
+		"menus": {
+			"editor/context": [
+				{
+					"command": "dpscript.compileDPScript",
+					"when": "editorLangId == dpscript"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "cd client && npm run update-vscode && cd .. && npm run compile",
